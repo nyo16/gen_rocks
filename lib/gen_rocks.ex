@@ -3,7 +3,8 @@ defmodule GenRocks do
   GenRocks - A distributed queueing system built with Elixir GenStage.
   
   Provides Apache Beam-like PCollection functionality with Flow transformations,
-  Kafka-like distributed queuing with pluggable storage adapters (ETS, RocksDB).
+  Kafka-like distributed queuing with pluggable storage adapters (ETS, RocksDB),
+  and comprehensive Sources/Sinks for data integration.
 
   ## Features
 
@@ -12,6 +13,7 @@ defmodule GenRocks do
   - **GenStage Integration**: Built on GenStage for back-pressure and flow control
   - **Flow Processing**: Apache Beam-style PCollection transformations
   - **Consumer Groups**: Load-balanced message consumption
+  - **Sources & Sinks**: File-based data ingestion and output (extensible)
   - **Fault Tolerance**: Supervision trees and error handling
 
   ## Quick Start
@@ -37,20 +39,28 @@ defmodule GenRocks do
         |> GenRocks.transform(fn msg -> %{msg | processed: true} end)
         |> GenRocks.collect()
 
+      # File-based data processing
+      GenRocks.read_file("input.csv", format: :csv)
+      |> GenRocks.transform(&process_row/1)
+      |> GenRocks.write_file("output.json", format: :json)
+      |> Flow.run()
+
   ## Architecture
 
-      [Producer] -> [Partition Router] -> [Queue Managers] -> [Consumer Groups]
-                                              |
-                                         [Flow Pipeline]
+      [Sources] -> [Producers] -> [Routers] -> [Queue Managers] -> [Consumer Groups] -> [Sinks]
+                        |                           |                      |
+                   [Flow Pipeline]           [Storage Adapters]      [Flow Pipeline]
 
-  ## Storage Adapters
+  ## Components
 
-  - **ETS**: In-memory storage for development and testing
-  - **RocksDB**: Persistent storage for production use
-  - **Custom**: Implement your own storage adapter
+  - **Sources**: File, Database, API data ingestion (extensible)
+  - **Storage Adapters**: ETS (development), RocksDB (production), custom adapters
+  - **Sinks**: File, Database, API data output (extensible)
+  - **Flow Processing**: Apache Beam PCollection-equivalent transformations
   """
 
   alias GenRocks.Queue.{Supervisor, TopicProducer, ConsumerGroup, FlowProcessor}
+  alias GenRocks.{Source, Sink}
 
   # Topic Management
 
@@ -359,5 +369,179 @@ defmodule GenRocks do
   """
   def consumer_group_stats(group_id, topic) do
     ConsumerGroup.get_stats(group_id, topic)
+  end
+
+  # Sources and Sinks
+
+  @doc """
+  Creates a Flow from a data source.
+  Similar to Apache Beam's Read transform.
+
+  ## Examples
+
+      # Read from a text file
+      source_config = %{
+        file_path: "data/input.txt",
+        format: :lines,
+        topic: "file_data"
+      }
+
+      result = 
+        GenRocks.from_source(GenRocks.Source.FileSource, source_config)
+        |> GenRocks.filter(fn msg -> String.length(msg.value) > 10 end)
+        |> GenRocks.collect()
+
+      # Read JSON lines
+      json_config = %{
+        file_path: "data/events.jsonl",
+        format: :json,
+        topic: "events"
+      }
+
+      GenRocks.from_source(GenRocks.Source.FileSource, json_config)
+      |> GenRocks.transform(fn msg -> %{msg | processed: true} end)
+      |> GenRocks.run_to_sink(GenRocks.Sink.FileSink, %{
+        file_path: "output/processed.jsonl",
+        format: :json
+      })
+  """
+  def from_source(source_module, config, opts \\ []) do
+    Source.to_flow(source_module, config, opts)
+  end
+
+  @doc """
+  Starts a source producer that feeds data into a topic.
+
+  ## Examples
+
+      # Start file source that feeds into topic
+      {:ok, _} = GenRocks.start_source_producer(
+        GenRocks.Source.FileSource,
+        %{file_path: "logs/app.log", format: :lines, topic: "logs"},
+        name: :log_producer
+      )
+
+      # Then consume from the topic
+      {:ok, _} = GenRocks.start_consumer_group("processors", "logs", consumer_fn)
+  """
+  def start_source_producer(source_module, config, opts \\ []) do
+    Source.start_producer(source_module, config, opts)
+  end
+
+  @doc """
+  Writes Flow results to a data sink.
+  Similar to Apache Beam's Write transform.
+
+  ## Examples
+
+      # Write to a file
+      GenRocks.from_topic("events")
+      |> GenRocks.transform(&process_event/1)
+      |> GenRocks.to_sink(GenRocks.Sink.FileSink, %{
+        file_path: "output/processed_events.jsonl",
+        format: :json
+      })
+
+      # Write CSV with headers
+      GenRocks.from_topic("users")
+      |> GenRocks.to_sink(GenRocks.Sink.FileSink, %{
+        file_path: "output/users.csv",
+        format: :csv,
+        csv_headers: ["id", "name", "email"]
+      })
+  """
+  def to_sink(flow, sink_module, config, opts \\ []) do
+    sink_fn = Sink.to_flow_sink(sink_module, config, opts)
+    sink_fn.(flow)
+  end
+
+  @doc """
+  Runs a Flow pipeline and writes results to a sink.
+  Convenience function that combines collect and sink operations.
+
+  ## Examples
+
+      GenRocks.from_source(GenRocks.Source.FileSource, source_config)
+      |> GenRocks.filter(&important_message?/1)
+      |> GenRocks.run_to_sink(GenRocks.Sink.FileSink, sink_config)
+  """
+  def run_to_sink(flow, sink_module, config, opts \\ []) do
+    flow
+    |> to_sink(sink_module, config, opts)
+    |> Flow.run()
+  end
+
+  @doc """
+  Starts a sink consumer that writes messages from a topic to an external system.
+
+  ## Examples
+
+      # Start sink consumer that writes topic data to file
+      {:ok, _} = GenRocks.start_sink_consumer(
+        GenRocks.Sink.FileSink,
+        %{file_path: "archive/events.jsonl", format: :json},
+        subscribe_to: [{:via, Registry, {GenRocks.ProducerRegistry, "events"}}],
+        name: :file_writer
+      )
+  """
+  def start_sink_consumer(sink_module, config, opts \\ []) do
+    Sink.start_consumer(sink_module, config, opts)
+  end
+
+  # File-based convenience functions
+
+  @doc """
+  Convenience function to read from a file and create a Flow.
+
+  ## Examples
+
+      # Read text file line by line
+      GenRocks.read_file("input.txt")
+      |> GenRocks.filter(fn msg -> not String.starts_with?(msg.value, "#") end)
+      |> GenRocks.collect()
+
+      # Read JSON lines file
+      GenRocks.read_file("events.jsonl", format: :json)
+      |> GenRocks.transform(&enrich_event/1)
+      |> GenRocks.collect()
+  """
+  def read_file(file_path, opts \\ []) do
+    format = Keyword.get(opts, :format, :lines)
+    topic = Keyword.get(opts, :topic, "file_data")
+    
+    config = %{
+      file_path: file_path,
+      format: format,
+      topic: topic
+    }
+
+    from_source(GenRocks.Source.FileSource, config, opts)
+  end
+
+  @doc """
+  Convenience function to write Flow results to a file.
+
+  ## Examples
+
+      result
+      |> GenRocks.write_file("output.txt")
+
+      processed_data
+      |> GenRocks.write_file("results.json", format: :json)
+
+      user_data  
+      |> GenRocks.write_file("users.csv", 
+        format: :csv, 
+        csv_headers: ["id", "name", "email"]
+      )
+  """
+  def write_file(flow, file_path, opts \\ []) do
+    format = Keyword.get(opts, :format, :lines)
+    
+    config = Map.new(opts)
+    |> Map.put(:file_path, file_path)
+    |> Map.put(:format, format)
+
+    to_sink(flow, GenRocks.Sink.FileSink, config, opts)
   end
 end
