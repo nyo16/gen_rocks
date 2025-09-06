@@ -21,3 +21,8 @@ gen_rocks-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# GenRocks runtime data directories
+gen_rocks_logs/
+gen_rocks_data/
+*_logs/
