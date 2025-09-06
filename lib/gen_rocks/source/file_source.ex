@@ -288,7 +288,7 @@ defmodule GenRocks.Source.FileSource do
         |> Enum.map(fn field ->
           # Remove quotes if present
           if String.starts_with?(field, "\"") && String.ends_with?(field, "\"") do
-            String.slice(field, 1..-2)
+            String.slice(field, 1..-2//1)
           else
             field
           end

@@ -288,10 +288,10 @@ defmodule GenRocks.UseCases.AnalyticsPipeline do
 
   defp generate_event_properties do
     %{
-      "amount" => if :rand.uniform() < 0.1, do: :rand.uniform() * 1000, else: nil,
+      "amount" => (if :rand.uniform() < 0.1, do: :rand.uniform() * 1000, else: nil),
       "page_path" => "/#{Enum.random(["home", "products", "checkout", "profile", "about"])}",
       "referrer" => Enum.random(["google.com", "facebook.com", "direct", "email"]),
-      "ab_test" => if :rand.uniform() < 0.5, do: "test_#{:rand.uniform(3)}", else: nil,
+      "ab_test" => (if :rand.uniform() < 0.5, do: "test_#{:rand.uniform(3)}", else: nil),
       "variant" => Enum.random(["control", "variant_a", "variant_b"])
     }
   end

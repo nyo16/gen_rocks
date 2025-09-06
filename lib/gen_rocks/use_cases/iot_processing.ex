@@ -342,7 +342,7 @@ defmodule GenRocks.UseCases.IoTProcessing do
     
     prediction = %{
       maintenance_score: maintenance_score,
-      recommended_action: if maintenance_score > 0.8, do: "immediate", else: "monitor",
+      recommended_action: (if maintenance_score > 0.8, do: "immediate", else: "monitor"),
       indicators: %{
         variance: Enum.at(maintenance_indicators, 0),
         battery: Enum.at(maintenance_indicators, 1),

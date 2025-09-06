@@ -101,11 +101,11 @@ defmodule GenRocks.Queue.ConsumerGroup do
     }
 
     # Store last processed offset for this partition
-    if last_offset do
+    new_state = if last_offset do
       new_subscriptions = Map.put(state.subscriptions, partition, last_offset)
-      new_state = %{state | subscriptions: new_subscriptions, stats: new_stats}
+      %{state | subscriptions: new_subscriptions, stats: new_stats}
     else
-      new_state = %{state | stats: new_stats}
+      %{state | stats: new_stats}
     end
 
     Logger.debug("ConsumerGroup #{state.group_id} processed #{processed_count} messages from partition #{partition}")
@@ -223,10 +223,9 @@ defmodule GenRocks.Queue.ConsumerGroup do
           max_demand: config.max_demand,
           min_demand: config.min_demand
         ]
-        GenStage.sync_subscribe(self(), 
-          to: {:via, Registry, {GenRocks.QueueRegistry, {topic, partition}}},
-          subscription_opts
-        )
+        GenStage.sync_subscribe(self(), [
+          to: {:via, Registry, {GenRocks.QueueRegistry, {topic, partition}}}
+        ] ++ subscription_opts)
         
       {:error, {:already_started, _pid}} ->
         # Queue manager already exists, just subscribe
@@ -234,10 +233,9 @@ defmodule GenRocks.Queue.ConsumerGroup do
           max_demand: config.max_demand,
           min_demand: config.min_demand
         ]
-        GenStage.sync_subscribe(self(),
-          to: {:via, Registry, {GenRocks.QueueRegistry, {topic, partition}}},
-          subscription_opts
-        )
+        GenStage.sync_subscribe(self(), [
+          to: {:via, Registry, {GenRocks.QueueRegistry, {topic, partition}}}
+        ] ++ subscription_opts)
         
       error ->
         Logger.error("Failed to subscribe to partition #{partition}: #{inspect(error)}")

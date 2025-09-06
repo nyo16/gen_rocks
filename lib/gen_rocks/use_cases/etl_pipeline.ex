@@ -136,9 +136,9 @@ defmodule GenRocks.UseCases.ETLPipeline do
       normalized = %{
         region: String.upcase(String.trim(msg.value.region)),
         product: String.trim(msg.value.product),
-        amount: if is_binary(msg.value.amount), 
+        amount: (if is_binary(msg.value.amount), 
                    do: String.to_float(msg.value.amount), 
-                   else: msg.value.amount,
+                   else: msg.value.amount),
         date: msg.value.date,
         salesperson: msg.value.salesperson
       }

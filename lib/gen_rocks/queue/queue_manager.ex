@@ -72,11 +72,28 @@ defmodule GenRocks.Queue.QueueManager do
       max_queue_size: Keyword.get(opts, :max_queue_size, 10_000)
     }
 
-    # Initialize storage adapter
-    storage_config = Map.merge(config.storage_config, %{
-      table_name: String.to_atom("queue_#{topic}_#{partition}"),
-      path: Path.join(["data", topic, "partition_#{partition}"])
-    })
+    # Initialize storage adapter with appropriate configuration
+    base_storage_config = case config.storage_adapter do
+      GenRocks.Storage.EtsAdapter ->
+        %{
+          table_name: String.to_atom("queue_#{topic}_#{partition}")
+        }
+      GenRocks.Storage.DiskLogAdapter ->
+        %{
+          topic: topic,
+          partition: partition,
+          log_dir: "./gen_rocks_data"
+        }
+      _ ->
+        # Generic configuration for unknown adapters
+        %{
+          topic: topic,
+          partition: partition,
+          path: Path.join(["data", topic, "partition_#{partition}"])
+        }
+    end
+    
+    storage_config = Map.merge(base_storage_config, config.storage_config)
 
     case Adapter.new(config.storage_adapter, storage_config) do
       {:ok, storage} ->

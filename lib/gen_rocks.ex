@@ -3,13 +3,14 @@ defmodule GenRocks do
   GenRocks - A distributed queueing system built with Elixir GenStage.
   
   Provides Apache Beam-like PCollection functionality with Flow transformations,
-  Kafka-like distributed queuing with pluggable storage adapters (ETS, RocksDB),
+  Kafka-like distributed queuing with pluggable storage adapters (ETS, disk_log, RocksDB),
   and comprehensive Sources/Sinks for data integration.
 
   ## Features
 
   - **Distributed Queuing**: Topic-based message queuing with partitioning
-  - **Storage Adapters**: Pluggable storage (ETS for development, RocksDB for production)
+  - **Storage Adapters**: Pluggable storage (ETS for development, disk_log for durability, RocksDB for production)
+  - **Write-Ahead Logging**: disk_log adapter provides WAL semantics with automatic recovery
   - **GenStage Integration**: Built on GenStage for back-pressure and flow control
   - **Flow Processing**: Apache Beam-style PCollection transformations
   - **Consumer Groups**: Load-balanced message consumption
@@ -88,6 +89,30 @@ defmodule GenRocks do
     Supervisor.start_topic(topic, partition_count, opts)
   end
 
+  @doc """
+  Starts a topic with the disk_log storage adapter for durability.
+  
+  Options:
+  - `:log_dir` - Directory for log files (default: "./gen_rocks_data")
+  - `:max_no_files` - Maximum number of wrap files per partition (default: 10)
+  - `:max_no_bytes` - Maximum bytes per wrap file (default: 10MB)
+  
+  ## Example
+  
+      {:ok, _} = GenRocks.start_topic_with_disk_log("orders", 4, 
+        log_dir: "./production_data",
+        max_no_files: 20
+      )
+  """
+  def start_topic_with_disk_log(topic, partition_count, opts \\ []) do
+    disk_log_opts = [
+      storage_adapter: GenRocks.Storage.DiskLogAdapter,
+      storage_config: Map.new(opts)
+    ]
+    
+    Supervisor.start_topic(topic, partition_count, disk_log_opts)
+  end
+  
   @doc """
   Stops a topic and all its associated processes.
   """
@@ -324,9 +349,11 @@ defmodule GenRocks do
   Applies side effects without modifying the flow.
   Useful for logging, metrics, or external API calls.
 
+  ## Example
+
       GenRocks.from_topic("events")
       |> GenRocks.side_effect(fn msg -> 
-        Logger.info("Processing: #{inspect(msg)}")
+        Logger.info("Processing: \#{inspect(msg)}")
       end)
   """
   def side_effect(flow, side_effect_fn) do
