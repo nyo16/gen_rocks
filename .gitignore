@@ -26,3 +26,4 @@ gen_rocks-*.tar
 gen_rocks_logs/
 gen_rocks_data/
 *_logs/
+*logs/

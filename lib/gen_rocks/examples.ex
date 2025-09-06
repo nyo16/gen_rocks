@@ -2,6 +2,11 @@ defmodule GenRocks.Examples do
   @moduledoc """
   Example usage patterns for the GenRocks distributed queue system.
   Demonstrates Apache Beam-like PCollection operations and distributed processing.
+  
+  For more comprehensive examples, see:
+  - `GenRocks.Examples.StorageAdapterExamples` - Storage adapter usage and comparisons
+  - `GenRocks.Examples.DataProcessingExamples` - Flow-based data processing pipelines
+  - `GenRocks.Examples.DiskLogExamples` - DiskLog adapter specific examples
   """
 
   require Logger

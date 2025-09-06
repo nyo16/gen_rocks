@@ -23,7 +23,9 @@ defmodule GenRocks.MixProject do
   defp deps do
     [
       {:gen_stage, "~> 1.0"},
-      {:rocksdb, github: "nyo16/erlang-rocksdb", branch: "nyo16-update-cmake-min-ver"}
+      {:rocksdb, github: "nyo16/erlang-rocksdb", branch: "nyo16-update-cmake-min-ver"},
+      {:flow, "~> 1.2"},
+      {:jason, "~> 1.4"}
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     ]
